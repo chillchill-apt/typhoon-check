@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>社區防颱巡檢表</title>
+<style>
+  :root{
+    --cream:#FAF6EF;
+    --ink:#2B2A26;
+    --ink-soft:#6B675E;
+    --line:#E6DFD2;
+    --orange:#E8730C;
+    --orange-soft:#FDEBDA;
+    --storm:#243642;
+    --storm-deep:#1A2830;
+    --done:#3F8F5F;
+    --done-soft:#E4F1E9;
+    --na:#9A958A;
+    --na-soft:#EFECE4;
+    --card:#FFFFFF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    font-size:16px;
+    line-height:1.55;
+  }
+
+  /* ── 警報色帶標頭 ── */
+  header.app{
+    background:var(--storm);
+    color:#F4EFE6;
+    padding:20px 18px 16px;
+  }
+  .alert-band{
+    display:flex;align-items:center;gap:10px;
+    font-size:13px;letter-spacing:.18em;
+    color:#F5B36B;text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .alert-band::before,.alert-band::after{
+    content:"";flex:0 0 26px;height:2px;
+    background:repeating-linear-gradient(90deg,#F5B36B 0 6px,transparent 6px 11px);
+  }
+  header.app h1{font-size:24px;font-weight:700;letter-spacing:.04em;}
+  header.app .sub{font-size:13px;color:#B9C4C9;margin-top:4px;}
+
+  /* 基本資料 */
+  .meta{
+    background:var(--storm-deep);
+    padding:14px 18px 18px;
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  }
+  .meta label{font-size:12px;color:#8FA1AB;display:block;margin-bottom:3px;letter-spacing:.06em;}
+  .meta input{
+    width:100%;border:none;border-bottom:1px solid #3D5361;
+    background:transparent;color:#F4EFE6;font-size:15px;
+    padding:4px 2px;border-radius:0;font-family:inherit;
+  }
+  .meta input:focus{outline:none;border-bottom-color:var(--orange);}
+  .meta .full{grid-column:1/-1;}
+
+  /* 進度列(黏著) */
+  .progress-wrap{
+    position:sticky;top:0;z-index:50;
+    background:var(--cream);
+    border-bottom:1px solid var(--line);
+    padding:10px 18px 12px;
+  }
+  .progress-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .progress-msg{font-size:14px;color:var(--ink-soft);}
+  .progress-num{font-size:14px;font-weight:700;color:var(--orange);font-variant-numeric:tabular-nums;}
+  .bar{height:8px;background:#EDE6D8;border-radius:99px;overflow:hidden;}
+  .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#F5A24B,var(--orange));border-radius:99px;transition:width .35s ease;}
+
+  main{padding:14px 14px 40px;max-width:720px;margin:0 auto;}
+
+  /* 分類 */
+  .cat{margin-bottom:22px;}
+  .cat-head{
+    display:flex;align-items:baseline;gap:8px;
+    padding:0 4px 8px;
+  }
+  .cat-head h2{font-size:17px;font-weight:700;letter-spacing:.03em;}
+  .cat-head .count{font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+
+  /* 項目卡 */
+  .item{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:10px;
+    transition:border-color .2s,background .2s;
+  }
+  .item.done{border-color:#BFDCCB;background:#FBFDFB;}
+  .item.na{border-color:var(--na-soft);background:#FBFAF7;}
+  .item-top{display:flex;gap:12px;align-items:flex-start;}
+  .checkbox{
+    flex:0 0 30px;height:30px;border-radius:9px;
+    border:2px solid #CFC8B9;background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:17px;color:#fff;cursor:pointer;user-select:none;
+    transition:all .15s;
+  }
+  .item.done .checkbox{background:var(--done);border-color:var(--done);}
+  .item.na .checkbox{background:var(--na);border-color:var(--na);font-size:12px;}
+  .item-label{flex:1;}
+  .item-label .name{font-size:15.5px;font-weight:500;}
+  .item.done .name,.item.na .name{color:var(--ink-soft);}
+  .item.na .name{text-decoration:line-through;text-decoration-color:#C9C3B6;}
+  .item-label .hint{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .stamp{font-size:12px;color:var(--done);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .item.na .stamp{color:var(--na);}
+
+  .item-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;}
+  .btn{
+    border:1px solid var(--line);background:#fff;color:var(--ink);
+    font-size:13px;padding:7px 13px;border-radius:99px;
+    cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.na-toggle{color:var(--ink-soft);}
+  .item.na .btn.na-toggle{background:var(--na-soft);border-color:var(--na-soft);}
+
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .thumb{position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:1px solid var(--line);}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb .del{
+    position:absolute;top:2px;right:2px;width:20px;height:20px;
+    background:rgba(20,20,20,.65);color:#fff;border:none;border-radius:50%;
+    font-size:12px;line-height:1;cursor:pointer;
+  }
+
+  /* 匯出區 */
+  .export-zone{
+    margin-top:28px;text-align:center;
+    padding:22px 16px;border-top:1px dashed var(--line);
+  }
+  .export-zone p{font-size:13px;color:var(--ink-soft);margin-bottom:12px;}
+  .btn-primary{
+    background:var(--orange);color:#fff;border:none;
+    font-size:16px;font-weight:700;letter-spacing:.05em;
+    padding:14px 34px;border-radius:99px;cursor:pointer;
+    box-shadow:0 4px 14px rgba(232,115,12,.28);font-family:inherit;
+  }
+  .btn-primary:active{transform:scale(.98);}
+  .memo{font-size:12px;color:var(--na);margin-top:14px;}
+
+  /* ══ 報告(僅列印顯示) ══ */
+  #report{display:none;}
+  @media print{
+    body{background:#fff;}
+    .app-ui{display:none !important;}
+    #report{display:block;font-size:12.5pt;color:#111;}
+    #report .rp-head{border-bottom:3px solid #243642;padding-bottom:10px;margin-bottom:14px;}
+    #report h1{font-size:20pt;letter-spacing:.06em;}
+    #report .rp-meta{font-size:11pt;color:#333;margin-top:6px;display:flex;gap:24px;flex-wrap:wrap;}
+    #report .rp-summary{
+      display:flex;gap:26px;font-size:11pt;
+      border:1px solid #999;border-radius:6px;padding:8px 14px;margin-bottom:16px;
+    }
+    #report .rp-summary b{font-size:14pt;}
+    #report h2{
+      font-size:13.5pt;background:#F0EBE0;padding:5px 10px;
+      margin:16px 0 8px;border-left:4px solid #E8730C;
+      page-break-after:avoid;
+    }
+    #report table{width:100%;border-collapse:collapse;}
+    #report td{border-bottom:1px solid #DDD;padding:5px 6px;vertical-align:top;font-size:11pt;}
+    #report td.st{width:64px;font-weight:700;white-space:nowrap;}
+    #report td.tm{width:120px;color:#555;font-variant-numeric:tabular-nums;white-space:nowrap;}
+    #report .st-done{color:#2E7D4F;}
+    #report .st-na{color:#888;}
+    #report .st-pending{color:#C0392B;}
+    #report .rp-photos{margin-top:14px;}
+    #report .rp-photo-item{page-break-inside:avoid;margin-bottom:12px;}
+    #report .rp-photo-item .cap{font-size:10.5pt;color:#333;margin-bottom:4px;font-weight:500;}
+    #report .rp-photo-grid{display:flex;gap:8px;flex-wrap:wrap;}
+    #report .rp-photo-grid img{width:220px;height:165px;object-fit:cover;border:1px solid #BBB;}
+    #report .rp-photo-grid .ph-time{font-size:9pt;color:#666;display:block;}
+    #report .rp-sign{
+      margin-top:34px;display:flex;gap:40px;font-size:11.5pt;
+      page-break-inside:avoid;
+    }
+    #report .rp-sign span{border-top:1px solid #333;padding-top:6px;flex:1;text-align:center;}
+    #report .rp-foot{margin-top:20px;font-size:9pt;color:#888;text-align:right;}
+  }
+
+  @media (min-width:600px){
+    header.app,.meta{padding-left:calc(50% - 342px);padding-right:calc(50% - 342px);}
+    .progress-wrap{padding-left:calc(50% - 346px);padding-right:calc(50% - 346px);}
+  }
+</style>
+</head>
+<body>
+
+<div class="app-ui">
+  <header class="app">
+    <div class="alert-band">颱風警報・防颱整備</div>
+    <h1>社區防颱巡檢表</h1>
+    <div class="sub">一項一項來，做完拍照存證，最後直接輸出報告給管委會。</div>
+  </header>
+
+  <div class="meta">
+    <div class="full">
+      <label>社區名稱</label>
+      <input id="siteName" type="text" placeholder="例:金世紀大廈" autocomplete="off">
+    </div>
+    <div>
+      <label>巡檢人</label>
+      <input id="inspector" type="text" placeholder="總幹事姓名" autocomplete="off">
+    </div>
+    <div>
+      <label>巡檢日期</label>
+      <input id="inspectDate" type="date">
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-row">
+      <span class="progress-msg" id="progressMsg">風還在海上，從容開始。</span>
+      <span class="progress-num" id="progressNum">0 / 0</span>
+    </div>
+    <div class="bar"><div id="progressBar"></div></div>
+  </div>
+
+  <main id="listRoot"></main>
+
+  <div class="export-zone app-ui-export">
+    <p>巡檢完成後，輸出成 PDF 報告，直接給管委會或張貼存查。</p>
+    <button class="btn-primary" onclick="exportPDF()">輸出 PDF 報告</button>
+    <div class="memo">照片與紀錄只保存在這個頁面裡，關閉或重新整理會清空，<br>請完成巡檢後記得先輸出報告。</div>
+  </div>
+</div>
+
+<div id="report"></div>
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+
+<script>
+/* ── 通用防颱巡檢項目 ── */
+const CHECKLIST = [
+  { cat:"一、排水系統", items:[
+    {label:"頂樓排水口、落水頭清理", hint:"落葉、垃圾清除，確認排水順暢"},
+    {label:"中庭與周邊排水溝清淤", hint:"含社區四周側溝、水溝蓋"},
+    {label:"地下室集水坑、截水溝檢查", hint:"確認無淤積、雜物"},
+  ]},
+  { cat:"二、抽水與電力設備", items:[
+    {label:"抽水機運轉測試", hint:"含浮球開關作動確認"},
+    {label:"發電機測試運轉", hint:"確認油料存量足夠"},
+    {label:"配電室、機房防水檢查", hint:"門縫、窗戶滲水風險"},
+  ]},
+  { cat:"三、防水閘門與擋水設施", items:[
+    {label:"防水閘門組裝測試", hint:"車道、出入口閘門確認可正常安裝"},
+    {label:"沙包、擋水板清點定位", hint:"數量足夠並放置於定點備用"},
+  ]},
+  { cat:"四、高空與戶外物件", items:[
+    {label:"頂樓雜物、水塔蓋固定", hint:"鐵皮、浪板、閒置物品清除或綁固"},
+    {label:"招牌、廣告物檢查", hint:"鬆脫、鏽蝕情形通知所有權人處理"},
+    {label:"中庭盆栽、桌椅收納", hint:"可移動物件移入室內或固定"},
+    {label:"樹木修剪與支架加固", hint:"過重枝葉修剪，新植樹木加支架"},
+  ]},
+  { cat:"五、門窗與公共設施", items:[
+    {label:"大廳玻璃門窗固定", hint:"必要時貼膠帶或防爆膜"},
+    {label:"天窗、採光罩檢查", hint:"確認密合、無鬆動"},
+    {label:"遮雨棚、雨遮固定", hint:"含車道口、側門雨遮"},
+  ]},
+  { cat:"六、電梯與地下室", items:[
+    {label:"電梯緊急停靠設定確認", hint:"淹水風險時停高樓層待命"},
+    {label:"地下室車道擋水措施", hint:"閘門、沙包定位完成"},
+    {label:"監視器、對講機功能確認", hint:"重點區域畫面正常"},
+  ]},
+  { cat:"七、公告與住戶通知", items:[
+    {label:"張貼防颱公告", hint:"電梯、佈告欄、社區群組"},
+    {label:"通知住戶收拾陽台物品", hint:"花盆、曬衣架等易墜落物"},
+    {label:"通知地下室車主防淹措施", hint:"低樓層、機械車位視情況移車"},
+    {label:"施工單位鷹架、圍籬加固", hint:"通知並留存通知紀錄"},
+  ]},
+  { cat:"八、物資與人員整備", items:[
+    {label:"防災物資清點", hint:"手電筒、電池、雨衣、雨鞋"},
+    {label:"值班人員安排確認", hint:"颱風期間輪值與聯繫方式"},
+    {label:"緊急聯絡名單更新", hint:"機電、保全、水電廠商電話"},
+  ]},
+];
+
+/* state[id] = {status:'pending'|'done'|'na', time:'', photos:[{src,time}]} */
+const state = {};
+let currentPhotoTarget = null;
+
+const $  = s => document.querySelector(s);
+const ts = () => {
+  const d = new Date();
+  const p = n => String(n).padStart(2,"0");
+  return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+function init(){
+  $("#inspectDate").value = new Date().toISOString().slice(0,10);
+  const root = $("#listRoot");
+  CHECKLIST.forEach((cat,ci)=>{
+    const sec = document.createElement("section");
+    sec.className = "cat";
+    sec.innerHTML = `<div class="cat-head"><h2>${cat.cat}</h2><span class="count" data-count="${ci}"></span></div>`;
+    cat.items.forEach((it,ii)=>{
+      const id = `c${ci}i${ii}`;
+      state[id] = {status:"pending", time:"", photos:[]};
+      const el = document.createElement("div");
+      el.className = "item";
+      el.id = id;
+      el.innerHTML = `
+        <div class="item-top">
+          <div class="checkbox" onclick="toggleDone('${id}')"></div>
+          <div class="item-label">
+            <div class="name">${it.label}</div>
+            <div class="hint">${it.hint}</div>
+            <div class="stamp" data-stamp></div>
+          </div>
+        </div>
+        <div class="item-actions">
+          <button class="btn" onclick="pickPhoto('${id}',true)">📷 拍照</button>
+          <button class="btn" onclick="pickPhoto('${id}',false)">🖼 相簿</button>
+          <button class="btn na-toggle" onclick="toggleNA('${id}')">不適用</button>
+        </div>
+        <div class="thumbs" data-thumbs></div>`;
+      sec.appendChild(el);
+    });
+    root.appendChild(sec);
+  });
+  refresh();
+}
+
+function toggleDone(id){
+  const s = state[id];
+  if(s.status === "done"){ s.status = "pending"; s.time = ""; }
+  else { s.status = "done"; s.time = ts(); }
+  render(id); refresh();
+}
+function toggleNA(id){
+  const s = state[id];
+  if(s.status === "na"){ s.status = "pending"; s.time = ""; }
+  else { s.status = "na"; s.time = ts(); }
+  render(id); refresh();
+}
+function render(id){
+  const s = state[id], el = document.getElementById(id);
+  el.classList.toggle("done", s.status==="done");
+  el.classList.toggle("na",   s.status==="na");
+  el.querySelector(".checkbox").textContent = s.status==="done" ? "✓" : (s.status==="na" ? "—" : "");
+  el.querySelector("[data-stamp]").textContent =
+    s.status==="done" ? `✓ 完成於 ${s.time}` : (s.status==="na" ? "不適用" : "");
+  const tw = el.querySelector("[data-thumbs]");
+  tw.innerHTML = "";
+  s.photos.forEach((p,i)=>{
+    const d = document.createElement("div");
+    d.className = "thumb";
+    d.innerHTML = `<img src="${p.src}" alt=""><button class="del" onclick="delPhoto('${id}',${i})">×</button>`;
+    tw.appendChild(d);
+  });
+}
+function delPhoto(id,i){
+  state[id].photos.splice(i,1);
+  render(id);
+}
+
+function refresh(){
+  const ids = Object.keys(state);
+  const total = ids.length;
+  const done  = ids.filter(k=>state[k].status!=="pending").length;
+  $("#progressNum").textContent = `${done} / ${total}`;
+  $("#progressBar").style.width = total ? (done/total*100)+"%" : "0%";
+  const r = total ? done/total : 0;
+  $("#progressMsg").textContent =
+    r===0   ? "風還在海上，從容開始。" :
+    r<0.5   ? "一項一項來，不急。" :
+    r<1     ? "過半了，節奏很好。" :
+              "全數完成。泡杯茶，等風來。";
+  CHECKLIST.forEach((cat,ci)=>{
+    const catIds = ids.filter(k=>k.startsWith(`c${ci}i`));
+    const c = catIds.filter(k=>state[k].status!=="pending").length;
+    document.querySelector(`[data-count="${ci}"]`).textContent = `${c}/${catIds.length}`;
+  });
+}
+
+/* ── 照片 ── */
+function pickPhoto(id, camera){
+  currentPhotoTarget = id;
+  const inp = $("#fileInput");
+  if(camera) inp.setAttribute("capture","environment");
+  else       inp.removeAttribute("capture");
+  inp.value = "";
+  inp.multiple = !camera;
+  inp.click();
+}
+document.getElementById("fileInput").addEventListener("change", async e=>{
+  const files = Array.from(e.target.files || []);
+  if(!files.length || !currentPhotoTarget) return;
+  for(const f of files){
+    const src = await compress(f);
+    state[currentPhotoTarget].photos.push({src, time: ts()});
+  }
+  render(currentPhotoTarget);
+});
+function compress(file){
+  return new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const MAX = 1280;
+      let {width:w, height:h} = img;
+      if(Math.max(w,h) > MAX){
+        const k = MAX/Math.max(w,h); w = Math.round(w*k); h = Math.round(h*k);
+      }
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      res(cv.toDataURL("image/jpeg",0.82));
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* ── 匯出 PDF(列印) ── */
+function exportPDF(){
+  const ids = Object.keys(state);
+  const pending = ids.filter(k=>state[k].status==="pending").length;
+  if(pending > 0 && !confirm(`還有 ${pending} 項未完成，確定要先輸出報告嗎?`)) return;
+
+  const site = $("#siteName").value.trim() || "(未填社區名稱)";
+  const who  = $("#inspector").value.trim() || "(未填)";
+  const date = $("#inspectDate").value || new Date().toISOString().slice(0,10);
+  const doneN = ids.filter(k=>state[k].status==="done").length;
+  const naN   = ids.filter(k=>state[k].status==="na").length;
+
+  let html = `
+    <div class="rp-head">
+      <h1>${esc(site)} 防颱整備巡檢報告</h1>
+      <div class="rp-meta">
+        <span>巡檢日期:${date}</span>
+        <span>巡檢人:${esc(who)}</span>
+        <span>報告產出:${ts()}</span>
+      </div>
+    </div>
+    <div class="rp-summary">
+      <span>檢核項目 <b>${ids.length}</b></span>
+      <span class="st-done">完成 <b>${doneN}</b></span>
+      <span class="st-na">不適用 <b>${naN}</b></span>
+      <span class="st-pending">未完成 <b>${pending}</b></span>
+    </div>`;
+
+  const photoSections = [];
+  CHECKLIST.forEach((cat,ci)=>{
+    html += `<h2>${cat.cat}</h2><table>`;
+    cat.items.forEach((it,ii)=>{
+      const s = state[`c${ci}i${ii}`];
+      const st = s.status==="done" ? `<span class="st-done">✓ 完成</span>`
+               : s.status==="na"   ? `<span class="st-na">— 不適用</span>`
+               : `<span class="st-pending">未完成</span>`;
+      html += `<tr><td class="st">${st}</td><td>${it.label}${s.photos.length?`(附照片 ${s.photos.length} 張)`:""}</td><td class="tm">${s.time||""}</td></tr>`;
+      if(s.photos.length){
+        photoSections.push({label:`${cat.cat.replace(/^[一二三四五六七八]、/,"")}/${it.label}`, photos:s.photos});
+      }
+    });
+    html += `</table>`;
+  });
+
+  if(photoSections.length){
+    html += `<h2>巡檢照片存證</h2><div class="rp-photos">`;
+    photoSections.forEach(p=>{
+      html += `<div class="rp-photo-item"><div class="cap">${p.label}</div><div class="rp-photo-grid">`;
+      p.photos.forEach(ph=>{
+        html += `<span><img src="${ph.src}"><span class="ph-time">${ph.time}</span></span>`;
+      });
+      html += `</div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `
+    <div class="rp-sign">
+      <span>總幹事簽章</span>
+      <span>主任委員簽章</span>
+    </div>
+    <div class="rp-foot">本報告由防颱巡檢系統產出，照片均附巡檢當下時間戳記。</div>`;
+
+  document.getElementById("report").innerHTML = html;
+  setTimeout(()=>window.print(), 60);
+}
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+init();
+</script>
+</body>
+</html>
