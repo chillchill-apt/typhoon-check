@@ -152,10 +152,6 @@
 
   /* ══ 報告(僅列印顯示) ══ */
   #report{display:none;}
-  #saveToast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(30,58,92,.92);color:#fff;padding:8px 18px;border-radius:20px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:99;}
-  #saveToast.show{opacity:1;}
-  #restoreBar{display:none;margin:12px 16px 0;padding:10px 14px;background:#e8f4ea;border:1px solid #9fd0a8;border-radius:10px;color:#20613a;font-size:15px;line-height:1.5;}
-  .btn-restart{margin-top:14px;background:none;border:1px solid #bbb;color:#777;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer;}
   @media print{
     body{background:#fff;}
     .app-ui{display:none !important;}
@@ -180,12 +176,13 @@
     #report .st-done{color:#2E7D4F;}
     #report .st-na{color:#888;}
     #report .st-pending{color:#C0392B;}
-    #report .rp-photos{margin-top:14px;}
-    #report .rp-photo-item{page-break-inside:avoid;margin-bottom:12px;}
-    #report .rp-photo-item .cap{font-size:10.5pt;color:#333;margin-bottom:4px;font-weight:500;}
+    #report .rp-item-row{page-break-inside:avoid;}
+    #report .rp-photo-row{page-break-inside:avoid;}
+    #report .rp-photo-row > td{border-bottom:1px solid #DDD;padding:2px 6px 12px;}
     #report .rp-photo-grid{display:flex;gap:8px;flex-wrap:wrap;}
-    #report .rp-photo-grid img{width:220px;height:165px;object-fit:cover;border:1px solid #BBB;}
-    #report .rp-photo-grid .ph-time{font-size:9pt;color:#666;display:block;}
+    #report .rp-photo-grid > span{display:inline-block;}
+    #report .rp-photo-grid img{width:180px;height:135px;object-fit:cover;border:1px solid #BBB;display:block;}
+    #report .rp-photo-grid .ph-time{font-size:9pt;color:#666;display:block;margin-top:2px;}
     #report .rp-sign{
       margin-top:34px;display:flex;gap:40px;font-size:11.5pt;
       page-break-inside:avoid;
@@ -224,8 +221,6 @@
     </div>
   </div>
 
-  <div id="restoreBar">✓ 上次的巡檢進度已自動保留（存於 <span id="restoreTime"></span>），可以直接繼續。</div>
-
   <div class="progress-wrap">
     <div class="progress-row">
       <span class="progress-msg" id="progressMsg">風還在海上，從容開始。</span>
@@ -239,10 +234,8 @@
   <div class="export-zone app-ui-export">
     <p>巡檢完成後，輸出成 PDF 報告，直接給管委會或張貼存查。</p>
     <button class="btn-primary" onclick="exportPDF()">輸出 PDF 報告</button>
-    <div class="memo">進度與照片會自動保存在這支手機的瀏覽器裡，<br>中途關閉頁面、切換 App 都沒關係，再點同一個連結進來就能繼續。</div>
-    <button class="btn-restart" onclick="restartAll()">🔄 清除紀錄，開始新的巡檢</button>
+    <div class="memo">照片與紀錄只保存在這個頁面裡，關閉或重新整理會清空，<br>請完成巡檢後記得先輸出報告。</div>
   </div>
-  <div id="saveToast">✓ 進度已自動儲存</div>
 </div>
 
 <div id="report"></div>
@@ -298,77 +291,6 @@ const CHECKLIST = [
 const state = {};
 let currentPhotoTarget = null;
 
-/* ── 自動儲存（IndexedDB，存在這支手機的瀏覽器內）── */
-const DB_NAME = "typhoonCheckDB", DB_STORE = "session";
-function openDB(){
-  return new Promise((res,rej)=>{
-    const q = indexedDB.open(DB_NAME, 1);
-    q.onupgradeneeded = ()=> q.result.createObjectStore(DB_STORE);
-    q.onsuccess = ()=> res(q.result);
-    q.onerror   = ()=> rej(q.error);
-  });
-}
-function dbPut(val){
-  return openDB().then(db=> new Promise((res,rej)=>{
-    const tx = db.transaction(DB_STORE,"readwrite");
-    tx.objectStore(DB_STORE).put(val,"current");
-    tx.oncomplete = res; tx.onerror = ()=>rej(tx.error);
-  }));
-}
-function dbGet(){
-  return openDB().then(db=> new Promise((res,rej)=>{
-    const r = db.transaction(DB_STORE).objectStore(DB_STORE).get("current");
-    r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error);
-  }));
-}
-function dbDel(){
-  return openDB().then(db=> new Promise((res,rej)=>{
-    const tx = db.transaction(DB_STORE,"readwrite");
-    tx.objectStore(DB_STORE).delete("current");
-    tx.oncomplete = res; tx.onerror = ()=>rej(tx.error);
-  }));
-}
-
-let saveTimer = null, toastTimer = null;
-function scheduleSave(){
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, 400);
-}
-function saveNow(){
-  const payload = {
-    meta: { site: $("#siteName").value, who: $("#inspector").value, date: $("#inspectDate").value },
-    state,
-    savedAt: ts()
-  };
-  dbPut(payload).then(()=>{
-    const t = $("#saveToast");
-    t.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> t.classList.remove("show"), 1400);
-  }).catch(()=>{ /* 私密瀏覽等無法儲存的情況，靜默略過 */ });
-}
-function restoreSaved(){
-  dbGet().then(saved=>{
-    if(!saved || !saved.state) return;
-    Object.keys(saved.state).forEach(id=>{ if(state[id]) state[id] = saved.state[id]; });
-    if(saved.meta){
-      $("#siteName").value  = saved.meta.site || "";
-      $("#inspector").value = saved.meta.who  || "";
-      if(saved.meta.date) $("#inspectDate").value = saved.meta.date;
-    }
-    Object.keys(state).forEach(id=> render(id));
-    refresh();
-    $("#restoreTime").textContent = saved.savedAt || "";
-    const bar = $("#restoreBar");
-    bar.style.display = "block";
-    setTimeout(()=>{ bar.style.display = "none"; }, 8000);
-  }).catch(()=>{});
-}
-function restartAll(){
-  if(!confirm("確定要清除這次的所有紀錄與照片，開始新的巡檢嗎？")) return;
-  dbDel().catch(()=>{}).then(()=> location.reload());
-}
-
 const $  = s => document.querySelector(s);
 const ts = () => {
   const d = new Date();
@@ -409,22 +331,19 @@ function init(){
     root.appendChild(sec);
   });
   refresh();
-  ["siteName","inspector","inspectDate"].forEach(i=>
-    document.getElementById(i).addEventListener("input", scheduleSave));
-  restoreSaved();
 }
 
 function toggleDone(id){
   const s = state[id];
   if(s.status === "done"){ s.status = "pending"; s.time = ""; }
   else { s.status = "done"; s.time = ts(); }
-  render(id); refresh(); scheduleSave();
+  render(id); refresh();
 }
 function toggleNA(id){
   const s = state[id];
   if(s.status === "na"){ s.status = "pending"; s.time = ""; }
   else { s.status = "na"; s.time = ts(); }
-  render(id); refresh(); scheduleSave();
+  render(id); refresh();
 }
 function render(id){
   const s = state[id], el = document.getElementById(id);
@@ -444,7 +363,7 @@ function render(id){
 }
 function delPhoto(id,i){
   state[id].photos.splice(i,1);
-  render(id); scheduleSave();
+  render(id);
 }
 
 function refresh(){
@@ -483,7 +402,7 @@ document.getElementById("fileInput").addEventListener("change", async e=>{
     const src = await compress(f);
     state[currentPhotoTarget].photos.push({src, time: ts()});
   }
-  render(currentPhotoTarget); scheduleSave();
+  render(currentPhotoTarget);
 });
 function compress(file){
   return new Promise(res=>{
@@ -514,7 +433,6 @@ function exportPDF(){
   const who  = $("#inspector").value.trim() || "(未填)";
   const date = $("#inspectDate").value || new Date().toISOString().slice(0,10);
   const doneN = ids.filter(k=>state[k].status==="done").length;
-  const naN   = ids.filter(k=>state[k].status==="na").length;
 
   let html = `
     <div class="rp-head">
@@ -526,39 +444,31 @@ function exportPDF(){
       </div>
     </div>
     <div class="rp-summary">
-      <span>檢核項目 <b>${ids.length}</b></span>
+      <span>應辦項目 <b>${doneN + pending}</b></span>
       <span class="st-done">完成 <b>${doneN}</b></span>
-      <span class="st-na">不適用 <b>${naN}</b></span>
       <span class="st-pending">未完成 <b>${pending}</b></span>
     </div>`;
 
-  const photoSections = [];
   CHECKLIST.forEach((cat,ci)=>{
-    html += `<h2>${cat.cat}</h2><table>`;
+    let rows = "";
     cat.items.forEach((it,ii)=>{
       const s = state[`c${ci}i${ii}`];
+      if(s.status==="na") return;   // 不適用項目整項移除,不列入報告
       const st = s.status==="done" ? `<span class="st-done">✓ 完成</span>`
-               : s.status==="na"   ? `<span class="st-na">— 不適用</span>`
                : `<span class="st-pending">未完成</span>`;
-      html += `<tr><td class="st">${st}</td><td>${it.label}${s.photos.length?`(附照片 ${s.photos.length} 張)`:""}</td><td class="tm">${s.time||""}</td></tr>`;
+      rows += `<tr class="rp-item-row"><td class="st">${st}</td><td>${it.label}${s.photos.length?`（附照片 ${s.photos.length} 張）`:""}</td><td class="tm">${s.time||""}</td></tr>`;
       if(s.photos.length){
-        photoSections.push({label:`${cat.cat.replace(/^[一二三四五六七八]、/,"")}/${it.label}`, photos:s.photos});
+        let cells = "";
+        s.photos.forEach(ph=>{
+          cells += `<span><img src="${ph.src}"><span class="ph-time">${ph.time}</span></span>`;
+        });
+        rows += `<tr class="rp-photo-row"><td></td><td colspan="2"><div class="rp-photo-grid">${cells}</div></td></tr>`;
       }
     });
-    html += `</table>`;
+    if(rows){   // 整類皆不適用時,連分類標題一併省略
+      html += `<h2>${cat.cat}</h2><table>${rows}</table>`;
+    }
   });
-
-  if(photoSections.length){
-    html += `<h2>巡檢照片存證</h2><div class="rp-photos">`;
-    photoSections.forEach(p=>{
-      html += `<div class="rp-photo-item"><div class="cap">${p.label}</div><div class="rp-photo-grid">`;
-      p.photos.forEach(ph=>{
-        html += `<span><img src="${ph.src}"><span class="ph-time">${ph.time}</span></span>`;
-      });
-      html += `</div></div>`;
-    });
-    html += `</div>`;
-  }
 
   html += `
     <div class="rp-sign">
