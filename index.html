@@ -195,6 +195,12 @@
     header.app,.meta{padding-left:calc(50% - 342px);padding-right:calc(50% - 342px);}
     .progress-wrap{padding-left:calc(50% - 346px);padding-right:calc(50% - 346px);}
   }
+  /* ── 自動暫存 UI ── */
+  #resumeBadge{display:none;background:#eaf5ec;border:1px solid #bfe0c6;color:#2b6b3a;font-size:13px;line-height:1.5;padding:9px 12px;border-radius:8px;margin:12px 0 0;}
+  .btn-clear{margin-top:16px;background:none;border:1px solid #d9534f;color:#c9302c;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer;}
+  .btn-clear:active{transform:scale(.98);background:#fbeaea;}
+  #saveHint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(24px);background:#1f2d3d;color:#fff;font-size:13px;padding:7px 15px;border-radius:20px;opacity:0;pointer-events:none;transition:.25s ease;z-index:60;}
+  #saveHint.show{opacity:.96;transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
@@ -221,6 +227,8 @@
     </div>
   </div>
 
+  <div id="resumeBadge">✓ 已自動載入上次未完成的巡檢進度，可直接接續。</div>
+
   <div class="progress-wrap">
     <div class="progress-row">
       <span class="progress-msg" id="progressMsg">風還在海上，從容開始。</span>
@@ -234,8 +242,10 @@
   <div class="export-zone app-ui-export">
     <p>巡檢完成後，輸出成 PDF 報告，直接給管委會或張貼存查。</p>
     <button class="btn-primary" onclick="exportPDF()">輸出 PDF 報告</button>
-    <div class="memo">照片與紀錄只保存在這個頁面裡，關閉或重新整理會清空，<br>請完成巡檢後記得先輸出報告。</div>
+    <div class="memo">進度與照片會自動存在這支手機的瀏覽器裡（IndexedDB），<br>中途關閉頁面、切換 App 都沒關係，再打開同一個連結就能接著做。</div>
+    <button class="btn-clear" onclick="clearAll()">🔄 清除紀錄，開始新的一份</button>
   </div>
+  <div id="saveHint">✓ 已自動儲存</div>
 </div>
 
 <div id="report"></div>
@@ -297,6 +307,99 @@ const ts = () => {
   return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+/* ── 本機自動暫存（IndexedDB）── */
+const DB_NAME="typhoon-check", STORE="kv", KEY="session";
+let _dbp=null;
+function idb(){
+  if(_dbp) return _dbp;
+  _dbp=new Promise((res,rej)=>{
+    let r;
+    try{ r=indexedDB.open(DB_NAME,1); }catch(e){ return rej(e); }
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE); };
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  return _dbp;
+}
+async function idbSet(val){
+  try{
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).put(val,KEY);
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+    return true;
+  }catch(e){ return false; }
+}
+async function idbGet(){
+  try{
+    const db=await idb();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readonly");
+      const rq=tx.objectStore(STORE).get(KEY);
+      rq.onsuccess=()=>res(rq.result||null);
+      rq.onerror=()=>rej(rq.error);
+    });
+  }catch(e){ return null; }
+}
+async function idbClear(){
+  try{
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).delete(KEY);
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){}
+}
+let _saveT=null;
+function save(){
+  clearTimeout(_saveT);
+  _saveT=setTimeout(async()=>{
+    const ok=await idbSet({
+      v:1,
+      site:$("#siteName").value,
+      who:$("#inspector").value,
+      date:$("#inspectDate").value,
+      state:JSON.parse(JSON.stringify(state)),
+      saved:Date.now()
+    });
+    if(ok) flashSaved();
+  },400);
+}
+function flashSaved(){
+  const el=$("#saveHint"); if(!el) return;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove("show"),1500);
+}
+async function loadSaved(){
+  const d=await idbGet();
+  if(!d) return;
+  if(typeof d.site==="string") $("#siteName").value=d.site;
+  if(typeof d.who==="string")  $("#inspector").value=d.who;
+  if(d.date) $("#inspectDate").value=d.date;
+  let restored=false;
+  if(d.state){
+    Object.keys(state).forEach(id=>{
+      const sv=d.state[id];
+      if(sv && typeof sv==="object"){
+        state[id]={status:sv.status||"pending", time:sv.time||"", photos:Array.isArray(sv.photos)?sv.photos:[]};
+        if(state[id].status!=="pending") restored=true;
+      }
+    });
+    Object.keys(state).forEach(id=>render(id));
+    refresh();
+  }
+  const rb=$("#resumeBadge"); if(rb && restored) rb.style.display="block";
+}
+async function clearAll(){
+  if(!confirm("確定要清除目前所有巡檢紀錄與照片，開始新的一份？此動作無法復原。")) return;
+  await idbClear();
+  location.reload();
+}
+
 function init(){
   $("#inspectDate").value = new Date().toISOString().slice(0,10);
   const root = $("#listRoot");
@@ -336,13 +439,13 @@ function toggleDone(id){
   const s = state[id];
   if(s.status === "done"){ s.status = "pending"; s.time = ""; }
   else { s.status = "done"; s.time = ts(); }
-  render(id); refresh();
+  render(id); refresh(); save();
 }
 function toggleNA(id){
   const s = state[id];
   if(s.status === "na"){ s.status = "pending"; s.time = ""; }
   else { s.status = "na"; s.time = ts(); }
-  render(id); refresh();
+  render(id); refresh(); save();
 }
 function render(id){
   const s = state[id], el = document.getElementById(id);
@@ -362,7 +465,7 @@ function render(id){
 }
 function delPhoto(id,i){
   state[id].photos.splice(i,1);
-  render(id);
+  render(id); save();
 }
 
 function refresh(){
@@ -401,7 +504,7 @@ document.getElementById("fileInput").addEventListener("change", async e=>{
     const src = await compress(f);
     state[currentPhotoTarget].photos.push({src, time: ts()});
   }
-  render(currentPhotoTarget);
+  render(currentPhotoTarget); save();
 });
 function compress(file){
   return new Promise(res=>{
@@ -481,7 +584,12 @@ function exportPDF(){
 }
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
+["#siteName","#inspector","#inspectDate"].forEach(sel=>{
+  const el=$(sel); if(el) el.addEventListener("input", save);
+});
+
 init();
+loadSaved();
 </script>
 </body>
 </html>
